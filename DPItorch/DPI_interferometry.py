@@ -48,6 +48,7 @@ plt.ion()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 parser = argparse.ArgumentParser(description="Deep Probabilistic Imaging Trainer for Interferometry")
+parser.add_argument("--cuda", default=0, type=int, help="cuda index in use")
 parser.add_argument("--obspath", default='../dataset/interferometry1/obs.uvfits', type=str, help="EHT observation file path")
 parser.add_argument("--impath", default='../dataset/interferometry1/gt.fits', type=str, help="groud-truth EHT image file path")
 parser.add_argument("--save_path", default='./save_path', type=str, help="file save path")
@@ -86,6 +87,8 @@ if __name__ == "__main__":
 	gt_path = args.impath
 	npix = args.npix
 
+	if torch.cuda.is_available():
+		device = torch.device('cuda:{}'.format(args.cuda))
 
 	obs = eh.obsdata.load_uvfits(obs_path)
 
@@ -142,14 +145,14 @@ if __name__ == "__main__":
 
 
 	camp_weight = 1.0
-	cphase_weight = 1.0#10.0#len(obs.cphase['cphase'])/len(obs.camp['camp'])
+	cphase_weight = len(obs.cphase['cphase'])/len(obs.camp['camp'])#1.0#10.0#
 	visamp_weight = 0.0#1e-3#1.0#1e-5#
 	imgl1_weight = args.l1 * npix*npix/flux_const#npix*npix/flux_const#1.0
 	imgtsv_weight = args.tsv * npix*npix#100*npix*npix
 	imgflux_weight = args.flux#1024#0.0#npix*npix#1.0#10
 	imgcenter_weight = args.center*1e5/(npix*npix)#1e5/(npix*npix)#100#0.0#1.0#npix*npix#10#
 	imgcrossentropy_weight = args.mem#1024#10*npix*npix
-	logdet_weight = args.logdet / (npix*npix)#1.0 / (npix*npix) #2.0 * 1.0 / len(obs.camp['camp'])
+	logdet_weight = 2.0 * args.logdet / len(obs.camp['camp'])#args.logdet / (npix*npix)#1.0 / (npix*npix) #
 
 
 	vis_true = torch.Tensor(np.concatenate([np.expand_dims(obs.data['vis'].real, 0), 
@@ -194,10 +197,13 @@ if __name__ == "__main__":
 		img_samp = img_samp.reshape((-1, npix, npix))
 
 		# apply scale factor and sigmoid/softplus layer for positivity constraint
-		scale_factor = torch.exp(logscale_factor.forward())
+		logscale_factor_value = logscale_factor.forward()
+		scale_factor = torch.exp(logscale_factor_value)
 		img = torch.nn.Softplus()(img_samp) * scale_factor
 		det_softplus = torch.sum(img_samp - torch.nn.Softplus()(img_samp), (1, 2))
-		logdet = logdet + det_softplus
+		# logdet = logdet + det_softplus
+		det_scale = logscale_factor_value * npix * npix
+		logdet = logdet + det_softplus + det_scale
 
 		vis, visamp, cphase, logcamp = eht_obs_torch(img)
 		loss_center = Loss_center_img(img) if imgcenter_weight>0 else 0
