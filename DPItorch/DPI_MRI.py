@@ -146,12 +146,6 @@ if __name__ == "__main__":
 	# optimize both scale and image generator
 	lr = args.lr
 	optimizer = optim.Adam(list(img_generator.parameters())+list(logscale_factor.parameters()), lr = lr)
-	# optimizer = optim.Adam(img_generator.parameters(), lr = lr)
-	# optimizer1 = optim.Adam(list(img_generator.parameters())+list(logscale_factor.parameters()), lr = lr)
-	# optimizer2 = optim.Adam(img_generator.parameters(), lr = lr)
-	# lr = 1e-1#3e-2#1e-2#
-	# optimizer = optim.LBFGS(img_generator.parameters(), lr = lr, max_iter=10, max_eval=None, tolerance_grad=1e-8, tolerance_change=1e-12, history_size=10)
-
 
 	n_epoch = args.n_epoch#30000#10000#100000#50000#100#
 	loss_list = []
@@ -165,10 +159,6 @@ if __name__ == "__main__":
 
 	n_batch = 32#8
 	for k in range(n_epoch):
-		# if k < 5000:
-		# 	optimizer = optimizer1
-		# else:
-		# 	optimizer = optimizer2
 		if args.model_form == 'realnvp':
 			z_sample = torch.randn(n_batch, npix*npix).to(device=device)
 		elif args.model_form == 'glow':
@@ -217,36 +207,6 @@ if __name__ == "__main__":
 		nn.utils.clip_grad_norm_(list(img_generator.parameters())+ list(logscale_factor.parameters()), args.clip)
 		optimizer.step()
 
-		# def closure():
-		# 	# generate image samples
-		# 	img_samp, logdet = img_generator.reverse(z_sample)
-		# 	img_samp = img_samp.reshape((-1, npix, npix))
-
-		# 	# apply scale factor and sigmoid/softplus layer for positivity constraint
-		# 	scale_factor = torch.exp(logscale_factor.forward())
-		# 	img = torch.nn.Softplus()(img_samp) * scale_factor
-		# 	det_softplus = torch.sum(img_samp - torch.nn.Softplus()(img_samp), (1, 2))
-		# 	logdet = logdet + det_softplus
-
-		# 	kspace_pred = fft2c_torch(img)
-		# 	loss_data = Loss_kspace_img(kspace_true, kspace_pred * torch.Tensor(mask).to(device)) / np.mean(mask)
-
-		# 	loss_l1 = Loss_l1(img) if imgl1_weight>0 else 0
-		# 	# loss_tsv = Loss_TSV(img) if imgtsv_weight>0 else 0
-		# 	loss_tsv = Loss_TV(img) if imgtsv_weight>0 else 0
-
-		# 	loss_prior = imgtsv_weight * loss_tsv + imgl1_weight * loss_l1
-
-		# 	if k < 0.0 * n_epoch:
-		# 		loss = torch.mean(loss_data) + torch.mean(loss_prior) - 10*logdet_weight*torch.mean(logdet)
-		# 	else:
-		# 		loss = torch.mean(loss_data) + torch.mean(loss_prior) - logdet_weight*torch.mean(logdet)
-
-		# 	optimizer.zero_grad()
-		# 	# loss.backward(retain_graph=True)
-		# 	loss.backward()
-		# 	return loss
-		# optimizer.step(closure)
 
 		print(f"epoch: {k:}, loss: {loss_list[-1]:.5f}, loss kspace: {loss_kspace_list[-1]:.5f}, logdet: {logdet_list[-1]:.5f}")
 		print(f"loss tsv: {loss_tsv_list[-1]:.5f}, loss l1: {loss_l1_list[-1]:.5f}")

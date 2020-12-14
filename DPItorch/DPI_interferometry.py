@@ -248,6 +248,7 @@ if __name__ == "__main__":
 		# print(f"epoch: {((n_epoch//n_blur)*k_blur+k):}, loss: {loss_list[-1]:.5f}, loss cphase: {loss_cphase_list[-1]:.5f}, loss camp: {loss_logca_list[-1]:.5f}, loss visamp: {loss_visamp_list[-1]:.5f}, loss prior: {loss_prior_list[-1]:.5f}")
 
 	torch.save(img_generator.state_dict(), save_path+'/generativemodel_'+args.model_form+'_res{}flow{}logdet{}_closure_fluxcentermemtsv'.format(npix, n_flow, args.logdet))
+	torch.save(logscale_factor.state_dict(), save_path+'/generativescale_'+args.model_form+'_res{}flow{}logdet{}_closure_fluxcentermemtsv'.format(npix, n_flow, args.logdet))
 	np.save(save_path+'/generativeimage_'+args.model_form+'_res{}flow{}logdet{}_closure_fluxcentermemtsv.npy'.format(npix, n_flow, args.logdet), img.cpu().detach().numpy().squeeze())
 
 	loss_all = {}
