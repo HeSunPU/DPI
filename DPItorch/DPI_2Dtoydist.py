@@ -14,7 +14,7 @@ from sklearn import datasets
 
 plt.ion()
 
-from generative_model import glow_model
+from generative_model import realnvpfc_model
 
 ###############################################################################
 # Three examples of 2D toy loglikelihood
@@ -41,7 +41,8 @@ log_prob3 = lambda x, y: -0.5 * ((4*y - torch.sin(2*np.pi*x))/0.4)**2
 ###############################################################################
 # training a normalizing flow to approximate probability function
 ###############################################################################
-loss_func = -log_prob1 # select the likelihood function to estimate
+# loss_func = -log_prob1 # select the likelihood function to estimate
+loss_func = lambda x, y: -log_prob1(x, y) # select the likelihood function to estimate
 
 # Define the architecture of normalizing flow
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

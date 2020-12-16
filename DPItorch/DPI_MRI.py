@@ -32,15 +32,16 @@ parser.add_argument("--maskpath", default='../dataset/fastmri_sample/mask/mask8.
 parser.add_argument("--save_path", default='./save_path_mri', type=str, help="file save path")
 parser.add_argument("--npix", default=64, type=int, help="image shape (pixels)")
 parser.add_argument("--ratio", default=1/8, type=float, help="MRI compression ratio")
+parser.add_argument("--sigma", default=5e-7, type=float, help="std of MRI additive measurement noise")
 parser.add_argument("--model_form", default='realnvp', type=str, help="form of the deep generative model")
 parser.add_argument("--n_flow", default=16, type=int, help="number of flows in RealNVP or Glow")
 parser.add_argument("--n_block", default=4, type=int, help="number of blocks in Glow")
-parser.add_argument("--lr", default=1e-4, type=float, help="learning rate")
+parser.add_argument("--lr", default=1e-5, type=float, help="learning rate")
 parser.add_argument("--n_epoch", default=3000, type=int, help="number of epochs for training RealNVP")
 parser.add_argument("--logdet", default=1.0, type=float, help="logdet weight")
 # parser.add_argument("--l1", default=1e4, type=float, help="l1 prior weight")
 parser.add_argument("--l1", default=0.0, type=float, help="l1 prior weight")
-parser.add_argument("--tsv", default=1e3, type=float, help="tsv prior weight")
+parser.add_argument("--tv", default=1e3, type=float, help="tv prior weight")
 # parser.add_argument("--flux", default=0.1, type=float, help="flux prior weight")
 parser.add_argument("--clip", default=1e-2, type=float, help="gradient clip for neural network training")
 
@@ -90,6 +91,7 @@ if __name__ == "__main__":
 	npix = args.npix
 	ratio = args.ratio
 	save_path = args.save_path
+	sigma = args.sigma
 
 	if device == 'cuda':
 		device = device + ':{}'.format(args.cuda)
@@ -97,8 +99,6 @@ if __name__ == "__main__":
 	save_path = args.save_path
 	if not os.path.exists(save_path):
 		os.makedirs(save_path)
-
-	sigma = 1/4 * 2e-6#1/4 * 1e-5#
 
 	# _, img_true, _ = readMRIdata(impath)
 	img_true = readMRIdata(impath)
@@ -116,7 +116,7 @@ if __name__ == "__main__":
 		n_flow = args.n_flow
 		affine = True
 		img_generator = realnvpfc_model.RealNVP(npix*npix, n_flow, affine=affine).to(device)
-		# img_generator.load_state_dict(torch.load(save_path+'/generativemodel_'+args.model_form+'ratio{}_res{}flow{}logdet{}_tv'.format(args.ratio, npix, n_flow, args.logdet)))
+		# img_generator.load_state_dict(torch.load(save_path+'/generativemodel_'+args.model_form+'_ratio{}_res{}flow{}logdet{}_tv'.format(args.ratio, npix, n_flow, args.logdet)))
 	elif args.model_form == 'glow':
 		n_channel = 1
 		n_flow = args.n_flow
@@ -128,7 +128,7 @@ if __name__ == "__main__":
 
 
 	logscale_factor = Img_logscale(scale=args.flux/(0.8*npix*npix)).to(device)
-	# logscale_factor.load_state_dict(torch.load(save_path+'/generativescale_'+args.model_form+'ratio{}_res{}flow{}logdet{}_tv'.format(args.ratio, npix, n_flow, args.logdet)))
+	# logscale_factor.load_state_dict(torch.load(save_path+'/generativescale_'+args.model_form+'_ratio{}_res{}flow{}logdet{}_tv'.format(args.ratio, npix, n_flow, args.logdet)))
 
 	# define the losses and weights for MRI
 	# Loss_kspace_img = Loss_kspace_diff(sigma)
@@ -136,9 +136,7 @@ if __name__ == "__main__":
 
 	kspace_weight = 1.0
 	imgl1_weight = args.l1 / args.flux
-	imgtsv_weight = args.tsv * npix / args.flux#args.tsv * npix*npix#100*npix*npix
-	# imgtsv_weight = args.tsv * npix / args.flux * (npix*npix)/ (0.5 * np.sum(mask))#
-	# logdet_weight = args.logdet / (npix*npix)#1.0 / (npix*npix) #2.0 * 1.0 / len(obs.camp['camp'])
+	imgtv_weight = args.tv * npix / args.flux
 	logdet_weight = args.logdet / (0.5 * np.sum(mask))
 
 	kspace_true = torch.Tensor(mask * kspace).to(device=device)
@@ -146,18 +144,19 @@ if __name__ == "__main__":
 	# optimize both scale and image generator
 	lr = args.lr
 	optimizer = optim.Adam(list(img_generator.parameters())+list(logscale_factor.parameters()), lr = lr)
+	# optimizer = optim.Adam(img_generator.parameters(), lr = lr)
 
 	n_epoch = args.n_epoch#30000#10000#100000#50000#100#
 	loss_list = []
 	loss_prior_list = []
 	loss_kspace_list = []
 	logdet_list = []
-	loss_tsv_list = []
+	loss_tv_list = []
 	loss_l1_list = []
 
 
 
-	n_batch = 32#8
+	n_batch = 64#32#8
 	for k in range(n_epoch):
 		if args.model_form == 'realnvp':
 			z_sample = torch.randn(n_batch, npix*npix).to(device=device)
@@ -183,45 +182,45 @@ if __name__ == "__main__":
 		loss_data = Loss_kspace_img(kspace_true, kspace_pred * torch.Tensor(mask).to(device)) / np.mean(mask)
 
 		loss_l1 = Loss_l1(img) if imgl1_weight>0 else 0
-		# loss_tsv = Loss_TSV(img) if imgtsv_weight>0 else 0
-		loss_tsv = Loss_TV(img) if imgtsv_weight>0 else 0
+		loss_tv = Loss_TV(img) if imgtv_weight>0 else 0
 
-		loss_prior = imgtsv_weight * loss_tsv + imgl1_weight * loss_l1
+		loss_prior = imgtv_weight * loss_tv + imgl1_weight * loss_l1
 
-		if k < 0.0 * n_epoch:
-			loss = torch.mean(loss_data) + torch.mean(loss_prior) - 10*logdet_weight*torch.mean(logdet)
-		else:
-			loss = torch.mean(loss_data) + torch.mean(loss_prior) - logdet_weight*torch.mean(logdet)
-		# loss = torch.mean(loss_data) + torch.mean(loss_prior) - logdet_weight*torch.mean(logdet)
+		# if k < 0.0 * n_epoch:
+		# 	loss = torch.mean(loss_data) + torch.mean(loss_prior) - 10*logdet_weight*torch.mean(logdet)
+		# else:
+		# 	loss = torch.mean(loss_data) + torch.mean(loss_prior) - logdet_weight*torch.mean(logdet)
+		loss = torch.mean(loss_data) + torch.mean(loss_prior) - logdet_weight*torch.mean(logdet)
 
 
 		loss_list.append(loss.detach().cpu().numpy())
 		loss_kspace_list.append(torch.mean(loss_data).detach().cpu().numpy())
 		loss_prior_list.append(torch.mean(loss_prior).detach().cpu().numpy())
 		logdet_list.append(-torch.mean(logdet).detach().cpu().numpy() / (npix*npix))
-		loss_tsv_list.append(imgtsv_weight * torch.mean(loss_tsv).detach().cpu().numpy() if imgtsv_weight>0 else 0)
+		loss_tv_list.append(imgtv_weight * torch.mean(loss_tv).detach().cpu().numpy() if imgtv_weight>0 else 0)
 		loss_l1_list.append(imgl1_weight * torch.mean(loss_l1).detach().cpu().numpy() if imgl1_weight>0 else 0)
 
 		optimizer.zero_grad()
 		loss.backward()
 		nn.utils.clip_grad_norm_(list(img_generator.parameters())+ list(logscale_factor.parameters()), args.clip)
+		# nn.utils.clip_grad_norm_(img_generator.parameters(), args.clip)
 		optimizer.step()
 
 
 		print(f"epoch: {k:}, loss: {loss_list[-1]:.5f}, loss kspace: {loss_kspace_list[-1]:.5f}, logdet: {logdet_list[-1]:.5f}")
-		print(f"loss tsv: {loss_tsv_list[-1]:.5f}, loss l1: {loss_l1_list[-1]:.5f}")
+		print(f"loss tv: {loss_tv_list[-1]:.5f}, loss l1: {loss_l1_list[-1]:.5f}")
 
 
-	torch.save(img_generator.state_dict(), save_path+'/generativemodel_'+args.model_form+'ratio{}_res{}flow{}logdet{}_tv'.format(args.ratio, npix, n_flow, args.logdet))
-	torch.save(logscale_factor.state_dict(), save_path+'/generativescale_'+args.model_form+'ratio{}_res{}flow{}logdet{}_tv'.format(args.ratio, npix, n_flow, args.logdet))
-	np.save(save_path+'/generativeimage_'+args.model_form+'ratio{}_res{}flow{}logdet{}_tv.npy'.format(args.ratio, npix, n_flow, args.logdet), img.cpu().detach().numpy().squeeze())
+	torch.save(img_generator.state_dict(), save_path+'/generativemodel_'+args.model_form+'_ratio{}_res{}flow{}logdet{}_tv2'.format(args.ratio, npix, n_flow, args.logdet))
+	torch.save(logscale_factor.state_dict(), save_path+'/generativescale_'+args.model_form+'_ratio{}_res{}flow{}logdet{}_tv2'.format(args.ratio, npix, n_flow, args.logdet))
+	np.save(save_path+'/generativeimage_'+args.model_form+'_ratio{}_res{}flow{}logdet{}_tv2.npy'.format(args.ratio, npix, n_flow, args.logdet), img.cpu().detach().numpy().squeeze())
 
 	loss_all = {}
 	loss_all['total'] = np.array(loss_list)
 	loss_all['kspace'] = np.array(loss_kspace_list)
 	loss_all['logdet'] = np.array(logdet_list)
-	loss_all['tsv'] = np.array(loss_tsv_list)
+	loss_all['tv'] = np.array(loss_tv_list)
 
 	loss_all['l1'] = np.array(loss_l1_list)
-	np.save(save_path+'/loss_'+args.model_form+'ratio{}_res{}flow{}logdet{}_tv.npy'.format(args.ratio, npix, n_flow, args.logdet), loss_all)
+	np.save(save_path+'/loss_'+args.model_form+'_ratio{}_res{}flow{}logdet{}_tv2.npy'.format(args.ratio, npix, n_flow, args.logdet), loss_all)
 

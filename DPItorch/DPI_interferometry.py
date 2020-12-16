@@ -93,7 +93,6 @@ if __name__ == "__main__":
 	obs = eh.obsdata.load_uvfits(obs_path)
 
 	# define the prior image for MEM regularizer
-	# npix = 32#96#64#
 	flux_const = np.median(obs.unpack_bl('APEX', 'ALMA', 'amp')['amp'])
 	prior_fwhm = args.prior_fwhm*eh.RADPERUAS#60*eh.RADPERUAS#
 	fov = args.fov*eh.RADPERUAS
@@ -123,6 +122,7 @@ if __name__ == "__main__":
 		n_flow = args.n_flow
 		affine = True
 		img_generator = realnvpfc_model.RealNVP(npix*npix, n_flow, affine=affine).to(device)
+		img_generator.load_state_dict(torch.load(save_path+'/generativemodel_'+args.model_form+'_res{}flow{}logdet{}_closure_fluxcentermemtsv'.format(npix, n_flow, args.logdet)))
 	elif args.model_form == 'glow':
 		n_channel = 1
 		n_flow = args.n_flow
@@ -133,6 +133,7 @@ if __name__ == "__main__":
 		img_generator = glow_model.Glow(n_channel, n_flow, n_block, affine=affine, conv_lu=not no_lu).to(device)
 
 	logscale_factor = Img_logscale(scale=flux_const/(0.8*npix*npix)).to(device)
+	logscale_factor.load_state_dict(torch.load(save_path+'/generativescale_'+args.model_form+'_res{}flow{}logdet{}_closure_fluxcentermemtsv'.format(npix, n_flow, args.logdet)))
 
 	# define the losses and weights for very long baseline interferometric imaging
 	Loss_center_img = Loss_center(device, center=npix/2-0.5, dim=npix)
@@ -152,7 +153,7 @@ if __name__ == "__main__":
 	imgflux_weight = args.flux#1024#0.0#npix*npix#1.0#10
 	imgcenter_weight = args.center*1e5/(npix*npix)#1e5/(npix*npix)#100#0.0#1.0#npix*npix#10#
 	imgcrossentropy_weight = args.mem#1024#10*npix*npix
-	logdet_weight = 2.0 * args.logdet / len(obs.camp['camp'])#args.logdet / (npix*npix)#1.0 / (npix*npix) #
+	logdet_weight = args.logdet / len(obs.camp['camp'])#args.logdet / (npix*npix)#1.0 / (npix*npix) #
 
 
 	vis_true = torch.Tensor(np.concatenate([np.expand_dims(obs.data['vis'].real, 0), 
@@ -166,6 +167,7 @@ if __name__ == "__main__":
 	# optimize both scale and image generator
 	lr = args.lr
 	optimizer = optim.Adam(list(img_generator.parameters())+list(logscale_factor.parameters()), lr = lr)
+	# optimizer = optim.Adam(img_generator.parameters(), lr = lr)
 
 
 	n_epoch = args.n_epoch#30000#10000#100000#50000#100#
@@ -226,6 +228,7 @@ if __name__ == "__main__":
 		optimizer.zero_grad()
 		loss.backward()
 		nn.utils.clip_grad_norm_(list(img_generator.parameters())+ list(logscale_factor.parameters()), args.clip)
+		# nn.utils.clip_grad_norm_(img_generator.parameters(), args.clip)
 		optimizer.step()
 
 		loss_list.append(loss.detach().cpu().numpy())
@@ -242,7 +245,7 @@ if __name__ == "__main__":
 
 
 		print(f"epoch: {k:}, loss: {loss_list[-1]:.5f}, loss cphase: {loss_cphase_list[-1]:.5f}, loss camp: {loss_logca_list[-1]:.5f}, loss visamp: {loss_visamp_list[-1]:.5f}, logdet: {logdet_list[-1]:.5f}")
-		print(f"loss cross entropy: {loss_cross_entropy_list[-1]:.5f}, loss tsv: {loss_tsv_list[-1]:.5f}, loss center: {loss_center_list[-1]:.5f}, loss flux: {loss_flux_list[-1]:.5f}")
+		print(f"loss cross entropy: {loss_cross_entropy_list[-1]:.5f}, loss tsv: {loss_tsv_list[-1]:.5f}, loss l1: {loss_l1_list[-1]:.5f}, loss center: {loss_center_list[-1]:.5f}, loss flux: {loss_flux_list[-1]:.5f}")
 
 
 		# print(f"epoch: {((n_epoch//n_blur)*k_blur+k):}, loss: {loss_list[-1]:.5f}, loss cphase: {loss_cphase_list[-1]:.5f}, loss camp: {loss_logca_list[-1]:.5f}, loss visamp: {loss_visamp_list[-1]:.5f}, loss prior: {loss_prior_list[-1]:.5f}")
