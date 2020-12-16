@@ -15,22 +15,22 @@ Deep Probabilistic Imaging: Uncertainty Quantification and Multi-modal Solution 
 
 **Arguments:**
 
-General:
-  * lr (float) - learning rate
-  * clip (float) - threshold for gradient clip
-  * n_epoch (int) - number of epochs
-  * npix (int) - size of reconstruction images (npix * npix)
-  * n_flow (int) - number of affine coupling blocks
-  * logdet (float) - weight of the entropy loss (larger means more diverse samples)
-  * save_path (str) - folder that saves the learned DPI normalizing flow model
+    General:
+    * lr (float) - learning rate
+    * clip (float) - threshold for gradient clip
+    * n_epoch (int) - number of epochs
+    * npix (int) - size of reconstruction images (npix * npix)
+    * n_flow (int) - number of affine coupling blocks
+    * logdet (float) - weight of the entropy loss (larger means more diverse samples)
+    * save_path (str) - folder that saves the learned DPI normalizing flow model
 
-For radio interferometric imaging:
-  * obspath (str) - observation data file
+    For radio interferometric imaging:
+    * obspath (str) - observation data file
 
-For compressed sensing MRI:
-  * impath (str) - fast MRI image for generating MRI measurements
-  * maskpath (str) - compressed sensing sampling mask
-  * sigma (float) - additive measurement noise
+    For compressed sensing MRI:
+    * impath (str) - fast MRI image for generating MRI measurements
+    * maskpath (str) - compressed sensing sampling mask
+    * sigma (float) - additive measurement noise
   
   
 
