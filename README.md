@@ -5,11 +5,11 @@ Deep Probabilistic Imaging: Uncertainty Quantification and Multi-modal Solution 
 ## Run Examples
 1. The simple 2D example can be run using the ipython notebook ```DPItorch/notebook/DPI toy 2D results.ipynb```
 
-2. The DPI radio interferometric example can be trained using ```DPItorch/DPI_interferometry.py```
+2. The DPI radio interferometric example can be trained using ```DPItorch/DPI_interferometry.py```, and analyzed using ```DPItorch/notebook/DPI interferometry results.ipynb```
 
     ```python DPI_interferometry.py --lr 1e-4 --clip 1e-3 --n_epoch 30000 --npix 32 --n_flow 16 --logdet 1.0 --save_path ./checkpoint/interferometry --obspath ../dataset/interferometry1/obs.uvfits```
   
-3. The DPI MRI example can be trained using ```DPItorch/DPI_interferometry.py```
+3. The DPI MRI example can be trained using ```DPItorch/DPI_interferometry.py```, and analyzed using ```DPItorch/notebook/DPI MRI results.ipynb```
 
     ```python DPI_MRI.py --lr 1e-5 --clip 1e-3 --n_epoch 100000 --npix 64 --n_flow 16 --ratio 4 --logdet 1.0 --tv 1e3 --save_path ./checkpoint/mri --impath ../dataset/fastmri_sample/mri/knee/scan_0.pkl --maskpath ../dataset/fastmri_sample/mask/mask4.npy --sigma 5e-7```
 
