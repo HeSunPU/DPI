@@ -32,10 +32,8 @@ Deep Probabilistic Imaging: Uncertainty Quantification and Multi-modal Solution 
     * maskpath (str) - compressed sensing sampling mask
     * sigma (float) - additive measurement noise
   
-  
-
 ## Requirements
-General requirements for pytorch release:
+General requirements for PyTorch release:
 * [pytorch](https://pytorch.org/)
 * [torchkbnufft](https://pypi.org/project/torchkbnufft/)
 
@@ -43,6 +41,8 @@ For radio interferometric imaging:
 * [eht-imaging](https://pypi.org/project/ehtim/)
 * [astropy](https://pypi.org/project/astropy/)
 * [pyNFFT](https://pypi.org/project/pyNFFT/)
+
+TensorFlow release is coming soon!
 
 ## Citation
 ```
