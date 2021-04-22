@@ -99,6 +99,7 @@ if __name__ == "__main__":
 	zbl = flux_const#2.0#0.8#
 	prior = eh.image.make_square(obs, npix, fov).add_gauss(zbl, (prior_fwhm, prior_fwhm, 0, 0, 0))
 	prior = prior.add_gauss(zbl*1e-6, (prior_fwhm, prior_fwhm, 0, prior_fwhm, prior_fwhm))
+
 	simim = prior.copy()
 
 	# simim = eh.image.load_fits(gt_path)
@@ -122,7 +123,7 @@ if __name__ == "__main__":
 		n_flow = args.n_flow
 		affine = True
 		img_generator = realnvpfc_model.RealNVP(npix*npix, n_flow, affine=affine).to(device)
-		img_generator.load_state_dict(torch.load(save_path+'/generativemodel_'+args.model_form+'_res{}flow{}logdet{}_closure_fluxcentermemtsv'.format(npix, n_flow, args.logdet)))
+		# img_generator.load_state_dict(torch.load(save_path+'/generativemodel_'+args.model_form+'_res{}flow{}logdet{}_closure_fluxcentermemtsv'.format(npix, n_flow, args.logdet)))
 	elif args.model_form == 'glow':
 		n_channel = 1
 		n_flow = args.n_flow
@@ -133,7 +134,7 @@ if __name__ == "__main__":
 		img_generator = glow_model.Glow(n_channel, n_flow, n_block, affine=affine, conv_lu=not no_lu).to(device)
 
 	logscale_factor = Img_logscale(scale=flux_const/(0.8*npix*npix)).to(device)
-	logscale_factor.load_state_dict(torch.load(save_path+'/generativescale_'+args.model_form+'_res{}flow{}logdet{}_closure_fluxcentermemtsv'.format(npix, n_flow, args.logdet)))
+	# logscale_factor.load_state_dict(torch.load(save_path+'/generativescale_'+args.model_form+'_res{}flow{}logdet{}_closure_fluxcentermemtsv'.format(npix, n_flow, args.logdet)))
 
 	# define the losses and weights for very long baseline interferometric imaging
 	Loss_center_img = Loss_center(device, center=npix/2-0.5, dim=npix)
@@ -153,7 +154,7 @@ if __name__ == "__main__":
 	imgflux_weight = args.flux#1024#0.0#npix*npix#1.0#10
 	imgcenter_weight = args.center*1e5/(npix*npix)#1e5/(npix*npix)#100#0.0#1.0#npix*npix#10#
 	imgcrossentropy_weight = args.mem#1024#10*npix*npix
-	logdet_weight = args.logdet / len(obs.camp['camp'])#args.logdet / (npix*npix)#1.0 / (npix*npix) #
+	logdet_weight = 2.0 * args.logdet / len(obs.camp['camp'])#args.logdet / (npix*npix)#1.0 / (npix*npix) #
 
 
 	vis_true = torch.Tensor(np.concatenate([np.expand_dims(obs.data['vis'].real, 0), 

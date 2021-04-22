@@ -37,7 +37,7 @@ def torch_complex_mul(x, y):
 ###############################################################################
 # extracte interferometry observation parameters from obs and simim files
 ###############################################################################
-def Obs_params_torch(obs, simim):
+def Obs_params_torch(obs, simim, snrcut=0.0):
 	###############################################################################
 	# generate the discrete Fourier transform matrices for complex visibilities
 	###############################################################################
@@ -60,7 +60,7 @@ def Obs_params_torch(obs, simim):
 	# generate the discrete Fourier transform matrices for closure phases
 	###############################################################################
 
-	obs.add_cphase(count='min')
+	obs.add_cphase(count='min', snrcut=snrcut)
 
 	tc1 = obs.cphase['t1']
 	tc2 = obs.cphase['t2']
@@ -113,8 +113,8 @@ def Obs_params_torch(obs, simim):
 	###############################################################################
 	# generate the discrete Fourier transform matrices for closure amp
 	###############################################################################
-	obs.add_camp(count='min')
-	obs.add_logcamp(count='min')
+	obs.add_camp(count='min', snrcut=snrcut)
+	obs.add_logcamp(count='min', snrcut=snrcut)
 
 	# obs.add_camp(count='max')
 	tca1 = obs.camp['t1']
@@ -295,6 +295,14 @@ def Loss_logamp_diff(sigma, device):
 		return torch.mean((y_true)**2/(sigma)**2 * (torch.log(y_true)-torch.log(y_pred))**2, 1)
 	return func
 
+
+def Loss_visamp_diff(sigma, device):
+	# log amp difference loss
+	sigma = torch.Tensor(sigma).type(torch.float32).to(device=device)
+	def func(y_true, y_pred):
+		return torch.mean((y_true-y_pred)**2/(sigma)**2, 1)
+	return func
+
 def Loss_l1(y_pred):
 	# image prior - sparsity loss
 	return torch.mean(torch.abs(y_pred), (-1, -2))
@@ -303,6 +311,10 @@ def Loss_l1(y_pred):
 def Loss_TSV(y_pred):
 	# image prior - total squared variation loss
 	return torch.mean((y_pred[:, 1::, :] - y_pred[:, 0:-1, :])**2, (-1, -2)) + torch.mean((y_pred[:, :, 1::] - y_pred[:, :, 0:-1])**2, (-1, -2))
+
+def Loss_TV(y_pred):
+	# image prior - total variation loss
+	return torch.mean(torch.abs(y_pred[:, 1::, :] - y_pred[:, 0:-1, :]), (-1, -2)) + torch.mean(torch.abs(y_pred[:, :, 1::] - y_pred[:, :, 0:-1]), (-1, -2))
 
 
 def Loss_flux(flux):
@@ -328,5 +340,5 @@ def Loss_center(device, center=15.5, dim=32):
 
 def Loss_cross_entropy(y_true, y_pred):
 	# image prior - cross entropy loss (measuring difference between recon and reference images)
-	loss = torch.mean(y_pred * (torch.log(y_pred + 1e-12) - torch.log(y_true)), (-1, -2))
+	loss = torch.mean(y_pred * (torch.log(y_pred + 1e-12) - torch.log(y_true + 1e-12)), (-1, -2))
 	return loss

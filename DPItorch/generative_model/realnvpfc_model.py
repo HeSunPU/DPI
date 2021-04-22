@@ -111,9 +111,13 @@ class AffineCoupling(nn.Module):
         self.net = nn.Sequential(
             nn.Linear(ndim-ndim//2, int(ndim / (2*seqfrac))),
             nn.LeakyReLU(negative_slope=0.01, inplace=True),
+            # nn.Softplus(beta=1, threshold=20),
+            # nn.Tanh(),
             nn.BatchNorm1d(int(ndim / (2*seqfrac)), eps=1e-2, affine=True),
             nn.Linear(int(ndim / (2*seqfrac)), int(ndim / (2*seqfrac))),
             nn.LeakyReLU(negative_slope=0.01, inplace=True),
+            # nn.Softplus(beta=1, threshold=20),
+            # nn.Tanh(),
             nn.BatchNorm1d(int(ndim / (2*seqfrac)), eps=1e-2, affine=True),
             ZeroFC(int(ndim / (2*seqfrac)), 2*(ndim // 2) if self.affine else ndim // 2),
         )
