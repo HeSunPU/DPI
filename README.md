@@ -42,7 +42,7 @@ For radio interferometric imaging:
 * [astropy](https://pypi.org/project/astropy/)
 * [pyNFFT](https://pypi.org/project/pyNFFT/)
 
-TensorFlow release is coming soon!
+Please check ```DPI.yml``` for the detailed Anaconda environment information. TensorFlow release is coming soon!
 
 ## Citation
 ```
