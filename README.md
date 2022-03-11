@@ -53,3 +53,27 @@ Please check ```DPI.yml``` for the detailed Anaconda environment information. Te
     year = {2021},
 }
 ```
+
+# alpha-Deep Probabilistic Imaging (alpha-DPI)
+![overview image](https://github.com/HeSunPU/DPI/blob/main/planet_astrometry_diagrm.png)
+alpha-Deep Probabilistic Inference (alpha-DPI): efficient uncertainty quantification from exoplanet astrometry to black hole feature extraction, [arXiv](https://arxiv.org/abs/2201.08506)
+
+## Run Examples
+1. The DPI radio interferometric example can be trained using ```DPItorch/DPIx_interferometry.py```
+
+    ```python DPIx_interferometry.py --n_gaussian 2 --divergence_type alpha --alpha_divergence 0.95 --n_epoch 20000 --lr 1e-4 --fov 160 --save_path ./checkpoint/interferometry_m87_mcfe/synthetic/crescentfloornuissance2/alpha095closure --obspath ../dataset/interferometry_m87/synthetic_crescentfloorgaussian2/obs_mring_synthdata_allnoise_scanavg_sysnoise2.uvfits```
+  
+2. The DPI MRI example can be trained using ```DPItorch/DPIx_orbit.py```
+3. 
+    ```python DPIx_orbit.py --divergence_type alpha --alpha_divergence 0.6 --coordinate_type cartesian --save_path ./checkpoint/orbit_beta_pic_b/cartesian/alpha06```
+    
+## Citation
+```
+@article{sun2022alpha,
+  title={alpha-Deep Probabilistic Inference (alpha-DPI): efficient uncertainty quantification from exoplanet astrometry to black hole feature extraction},
+  author={Sun, He and Bouman, Katherine L and Tiede, Paul and Wang, Jason J and Blunt, Sarah and Mawet, Dimitri},
+  journal={arXiv preprint arXiv:2201.08506},
+  year={2022}
+}
+
+```
