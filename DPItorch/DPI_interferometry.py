@@ -68,6 +68,7 @@ parser.add_argument("--center", default=1.0, type=float, help="centering prior w
 parser.add_argument("--mem", default=1024.0, type=float, help="mem prior weight")
 parser.add_argument("--clip", default=0.1, type=float, help="gradient clip for neural network training")
 
+parser.add_argument("--ttype", default='nfft', type=str, help="fourier transform computation method")
 
 
 class Img_logscale(nn.Module):
@@ -114,9 +115,10 @@ if __name__ == "__main__":
 
 
 	# define the eht observation function
+	ttype = args.ttype
 	nufft_ob = KbNufft(im_size=(npix, npix), numpoints=3)
-	ktraj_vis, pulsefac_vis_torch, cphase_ind_list, cphase_sign_list, camp_ind_list = Obs_params_torch(obs, simim)
-	eht_obs_torch = eht_observation_pytorch(npix, nufft_ob, ktraj_vis, pulsefac_vis_torch, cphase_ind_list, cphase_sign_list, camp_ind_list, device)
+	dft_mat, ktraj_vis, pulsefac_vis_torch, cphase_ind_list, cphase_sign_list, camp_ind_list = Obs_params_torch(obs, simim, snrcut=0.0, ttype=ttype)
+	eht_obs_torch = eht_observation_pytorch(npix, nufft_ob, dft_mat, ktraj_vis, pulsefac_vis_torch, cphase_ind_list, cphase_sign_list, camp_ind_list, device, ttype=ttype)
 
 	
 	if args.model_form == 'realnvp':

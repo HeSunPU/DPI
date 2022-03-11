@@ -33,13 +33,17 @@ def torch_complex_mul(x, y):
 	xy_imag = x[:, :, 0:1] * y[1::] + x[:, :, 1::] * y[0:1]
 	return torch.cat([xy_real, xy_imag], -2)
 
+def torch_complex_matmul(x, F):
+	Fx_real = torch.matmul(x, F[:, :, 0])
+	Fx_imag = torch.matmul(x, F[:, :, 1])
+	return torch.cat([Fx_real.unsqueeze(1), Fx_imag.unsqueeze(1)], -2)
 
 ###############################################################################
 # extracte interferometry observation parameters from obs and simim files
 ###############################################################################
-def Obs_params_torch(obs, simim, snrcut=0.0):
+def Obs_params_torch(obs, simim, snrcut=0.0, ttype='nfft'):
 	###############################################################################
-	# generate the discrete Fourier transform matrices for complex visibilities
+	# generate the discrete Fourier transform matrices or nfft variables for complex visibilities
 	###############################################################################
 	obs_data = obs.unpack(['u', 'v', 'vis', 'sigma'])
 	uv = np.hstack((obs_data['u'].reshape(-1,1), obs_data['v'].reshape(-1,1)))
@@ -55,12 +59,33 @@ def Obs_params_torch(obs, simim, snrcut=0.0):
 	ktraj_vis = torch.tensor(vu_scaled.T).unsqueeze(0)
 	pulsefac_vis_torch = torch.tensor(np.concatenate([np.expand_dims(pulsefac_vis.real, 0), 
 													np.expand_dims(pulsefac_vis.imag, 0)], 0))
+	if ttype == 'direct':
+		dft_mat = ftmatrix(simim.psize, simim.xdim, simim.ydim, uv, pulse=simim.pulse)
+		dft_mat = np.expand_dims(dft_mat.T, -1)
+		dft_mat = np.concatenate([dft_mat.real, dft_mat.imag], -1)
+		dft_mat = torch.tensor(dft_mat, dtype=torch.float32)
+	else:
+		dft_mat = None
 
 	###############################################################################
 	# generate the discrete Fourier transform matrices for closure phases
 	###############################################################################
+	# if snrcut > 0:
+	# 	obs.add_cphase(count='min', snrcut=snrcut)
+	# else:
+	# 	obs.add_cphase(count='min')
 
-	obs.add_cphase(count='min', snrcut=snrcut)
+	# if snrcut > 0:
+	# 	obs.add_cphase(count='max', snrcut=snrcut)
+	# else:
+	# 	obs.add_cphase(count='max')
+
+	if snrcut > 0:
+		obs.add_cphase(count='min-cut0bl', uv_min=.1e9, snrcut=snrcut)
+	else:
+		obs.add_cphase(count='min-cut0bl', uv_min=.1e9)
+
+
 
 	tc1 = obs.cphase['t1']
 	tc2 = obs.cphase['t2']
@@ -113,8 +138,19 @@ def Obs_params_torch(obs, simim, snrcut=0.0):
 	###############################################################################
 	# generate the discrete Fourier transform matrices for closure amp
 	###############################################################################
-	obs.add_camp(count='min', snrcut=snrcut)
-	obs.add_logcamp(count='min', snrcut=snrcut)
+	if snrcut > 0:
+		obs.add_camp(debias=True, count='min', snrcut=snrcut)
+		obs.add_logcamp(debias=True, count='min', snrcut=snrcut)
+	else:
+		obs.add_camp(debias=True, count='min')
+		obs.add_logcamp(debias=True, count='min')
+
+	# if snrcut > 0:
+	# 	obs.add_camp(debias=True, count='max', snrcut=snrcut)
+	# 	obs.add_logcamp(debias=True, count='max', snrcut=snrcut)
+	# else:
+	# 	obs.add_camp(debias=True, count='max')
+	# 	obs.add_logcamp(debias=True, count='max')
 
 	# obs.add_camp(count='max')
 	tca1 = obs.camp['t1']
@@ -191,12 +227,12 @@ def Obs_params_torch(obs, simim, snrcut=0.0):
 
 	camp_ind_list = [torch.tensor(camp_ind1), torch.tensor(camp_ind2), torch.tensor(camp_ind3), torch.tensor(camp_ind4)]
 	# camp_sign_list = [torch.tensor(camp_sign1), torch.tensor(camp_sign2), torch.tensor(camp_sign3), torch.tensor(camp_sign4)]
-	return ktraj_vis, pulsefac_vis_torch, cphase_ind_list, cphase_sign_list, camp_ind_list
+	return dft_mat, ktraj_vis, pulsefac_vis_torch, cphase_ind_list, cphase_sign_list, camp_ind_list
 
 ###############################################################################
 # Define the interferometry observation function
 ###############################################################################
-def eht_observation_pytorch(npix, nufft_ob, ktraj_vis, pulsefac_vis_torch, cphase_ind_list, cphase_sign_list, camp_ind_list, device):
+def eht_observation_pytorch(npix, nufft_ob, dft_mat, ktraj_vis, pulsefac_vis_torch, cphase_ind_list, cphase_sign_list, camp_ind_list, device, ttype='nfft'):
 	eps = 1e-16
 	nufft_ob = nufft_ob.to(device=device)
 	ktraj_vis = ktraj_vis.to(device=device)
@@ -214,14 +250,21 @@ def eht_observation_pytorch(npix, nufft_ob, ktraj_vis, pulsefac_vis_torch, cphas
 	camp_ind2 = camp_ind_list[1].to(device=device)
 	camp_ind3 = camp_ind_list[2].to(device=device)
 	camp_ind4 = camp_ind_list[3].to(device=device)
+
+	if ttype == 'direct':
+		F = dft_mat.to(device=device)
 	
 	def func(x):
-		x = torch.reshape(x, (-1, npix, npix)).type(torch.float32).to(device=device).unsqueeze(1)
-		x = torch.cat([x, torch.zeros_like(x)], 1)
-		x = x.unsqueeze(0)
+		if ttype == 'direct':
+			x = torch.reshape(x, (-1, npix*npix)).type(torch.float32).to(device=device)
+			vis_torch = torch_complex_matmul(x, F)
+		elif ttype == 'nfft':
+			x = torch.reshape(x, (-1, npix, npix)).type(torch.float32).to(device=device).unsqueeze(1)
+			x = torch.cat([x, torch.zeros_like(x)], 1)
+			x = x.unsqueeze(0)
 
-		kdata = nufft_ob(x, ktraj_vis)
-		vis_torch = torch_complex_mul(kdata, pulsefac_vis_torch).squeeze(0)
+			kdata = nufft_ob(x, ktraj_vis)
+			vis_torch = torch_complex_mul(kdata, pulsefac_vis_torch).squeeze(0)
 		vis_amp = torch.sqrt((vis_torch[:, 0, :])**2 + (vis_torch[:, 1, :])**2 + eps)
 
 		vis1_torch = torch.index_select(vis_torch, -1, cphase_ind1)
