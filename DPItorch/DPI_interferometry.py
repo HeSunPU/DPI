@@ -47,11 +47,14 @@ import argparse
 plt.ion()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 parser = argparse.ArgumentParser(description="Deep Probabilistic Imaging Trainer for Interferometry")
+
 parser.add_argument("--cuda", default=0, type=int, help="cuda index in use")
 parser.add_argument("--obspath", default='../dataset/interferometry1/obs.uvfits', type=str, help="EHT observation file path")
 parser.add_argument("--impath", default='../dataset/interferometry1/gt.fits', type=str, help="groud-truth EHT image file path")
 parser.add_argument("--save_path", default='./save_path', type=str, help="file save path")
+
 parser.add_argument("--npix", default=32, type=int, help="image shape (pixels)")
 parser.add_argument("--fov", default=160, type=float, help="field of view of the image in micro-arcsecond")
 parser.add_argument("--prior_fwhm", default=50, type=float, help="fwhm of image prior in micro-arcsecond")
@@ -61,6 +64,9 @@ parser.add_argument("--n_block", default=4, type=int, help="number of blocks in 
 parser.add_argument("--lr", default=1e-4, type=float, help="learning rate")
 parser.add_argument("--n_epoch", default=30000, type=int, help="number of epochs for training RealNVP")
 parser.add_argument("--logdet", default=1.0, type=float, help="logdet weight")
+
+parser.add_argument("--vis_only",default=False, type=bool, help="if True, use only complex visibilities to reconstruct images")
+
 parser.add_argument("--l1", default=1.0, type=float, help="l1 prior weight")
 parser.add_argument("--tsv", default=100.0, type=float, help="tsv prior weight")
 parser.add_argument("--flux", default=1000.0, type=float, help="flux prior weight")
@@ -83,6 +89,7 @@ class Img_logscale(nn.Module):
 
 
 if __name__ == "__main__":
+
 	args = parser.parse_args()
 	obs_path = args.obspath
 	gt_path = args.impath
@@ -94,7 +101,13 @@ if __name__ == "__main__":
 	obs = eh.obsdata.load_uvfits(obs_path)
 
 	# define the prior image for MEM regularizer
-	flux_const = np.median(obs.unpack_bl('APEX', 'ALMA', 'amp')['amp'])
+	try:
+		flux_const = np.median(obs.unpack_bl('AP', 'AA', 'amp')['amp'])
+	except:
+		flux_const = np.median(obs.unpack_bl('APEX', 'ALMA', 'amp')['amp'])
+        	
+	#flux_const = np.median(obs.unpack_bl('APEX', 'ALMA', 'amp')['amp'])
+	
 	prior_fwhm = args.prior_fwhm*eh.RADPERUAS#60*eh.RADPERUAS#
 	fov = args.fov*eh.RADPERUAS
 	zbl = flux_const#2.0#0.8#
@@ -148,15 +161,24 @@ if __name__ == "__main__":
 	Loss_logca_img2 = Loss_logca_diff2(obs.logcamp['sigmaca'], device)
 
 
-	camp_weight = 1.0
-	cphase_weight = len(obs.cphase['cphase'])/len(obs.camp['camp'])#1.0#10.0#
-	visamp_weight = 0.0#1e-3#1.0#1e-5#
-	imgl1_weight = args.l1 * npix*npix/flux_const#npix*npix/flux_const#1.0
-	imgtsv_weight = args.tsv * npix*npix#100*npix*npix
-	imgflux_weight = args.flux#1024#0.0#npix*npix#1.0#10
-	imgcenter_weight = args.center*1e5/(npix*npix)#1e5/(npix*npix)#100#0.0#1.0#npix*npix#10#
-	imgcrossentropy_weight = args.mem#1024#10*npix*npix
-	logdet_weight = 2.0 * args.logdet / len(obs.camp['camp'])#args.logdet / (npix*npix)#1.0 / (npix*npix) #
+	if args.vis_only:
+		vis_weight = 1.0
+		camp_weight = 0.0
+		cphase_weight = 0.0
+		visamp_weight = 0.0
+		
+	else:
+		vis_weight = 0.0
+		camp_weight = 1.0
+		cphase_weight = len(obs.cphase['cphase'])/len(obs.camp['camp'])#1.0#10.0#
+		visamp_weight = 0.0 #1e-3#1.0#1e-5#
+		
+	imgl1_weight = args.l1 * npix*npix/flux_const #npix*npix/flux_const#1.0
+	imgtsv_weight = args.tsv * npix*npix #100*npix*npix
+	imgflux_weight = args.flux #1024#0.0#npix*npix#1.0#10
+	imgcenter_weight = args.center*1e5/(npix*npix) #1e5/(npix*npix)#100#0.0#1.0#npix*npix#10#
+	imgcrossentropy_weight = args.mem #1024#10*npix*npix
+	logdet_weight = 2.0 * args.logdet / len(obs.camp['camp']) #args.logdet / (npix*npix)#1.0 / (npix*npix) #
 
 
 	vis_true = torch.Tensor(np.concatenate([np.expand_dims(obs.data['vis'].real, 0), 
@@ -179,7 +201,7 @@ if __name__ == "__main__":
 	loss_cphase_list = []
 	loss_logca_list = []
 	loss_visamp_list = []
-	# loss_vis_list = []
+	loss_vis_list = []
 	logdet_list = []
 	loss_center_list = []
 	loss_tsv_list = []
@@ -216,12 +238,17 @@ if __name__ == "__main__":
 		loss_tsv = Loss_TSV(img) if imgtsv_weight>0 else 0
 		loss_cross_entropy = Loss_cross_entropy(prior_im, img) if imgcrossentropy_weight>0 else 0
 		loss_flux = Loss_flux_img(img) if imgflux_weight>0 else 0
-		# loss_vis = Loss_vis_img(vis_true, vis)
+		loss_vis = Loss_vis_img(vis_true, vis)
 		loss_visamp = Loss_logamp_img(visamp_true, visamp) if visamp_weight>0 else 0
 		loss_cphase = Loss_cphase_img(cphase_true, cphase) if cphase_weight>0 else 0
 		loss_camp = Loss_logca_img2(logcamp_true, logcamp) if camp_weight>0 else 0
 
-		loss_data = camp_weight * loss_camp + cphase_weight * loss_cphase + visamp_weight * loss_visamp
+
+		if args.vis_only:
+			loss_data = vis_weight * loss_vis
+		else:
+			loss_data = camp_weight * loss_camp + cphase_weight * loss_cphase + visamp_weight * loss_visamp
+			
 		# loss_prior = imgflux_weight * loss_flux + imgl1_weight * loss_l1 + imgcenter_weight * loss_center
 		loss_prior = imgcrossentropy_weight*loss_cross_entropy + imgflux_weight * loss_flux + \
 					imgtsv_weight * loss_tsv + imgcenter_weight * loss_center + imgl1_weight * loss_l1
@@ -235,6 +262,7 @@ if __name__ == "__main__":
 		optimizer.step()
 
 		loss_list.append(loss.detach().cpu().numpy())
+		loss_vis_list.append(torch.mean(loss_vis).detach().cpu().numpy() if vis_weight>0 else 0)
 		loss_cphase_list.append(torch.mean(loss_cphase).detach().cpu().numpy() if cphase_weight>0 else 0)
 		loss_logca_list.append(torch.mean(loss_camp).detach().cpu().numpy() if camp_weight>0 else 0)
 		loss_visamp_list.append(torch.mean(loss_visamp).detach().cpu().numpy() if visamp_weight>0 else 0)
@@ -259,6 +287,7 @@ if __name__ == "__main__":
 
 	loss_all = {}
 	loss_all['total'] = np.array(loss_list)
+	loss_all['vis'] =np.array(loss_vis_list)
 	loss_all['cphase'] = np.array(loss_cphase_list)
 	loss_all['logca'] = np.array(loss_logca_list)
 	loss_all['visamp'] = np.array(loss_visamp_list)
